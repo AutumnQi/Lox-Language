@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Lox Language</title>
+        <style>
+</style>
+        
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        
+        
+        
+    </head>
+    <body class="vscode-light">
+        <h1 id="lox-language">Lox Language</h1>
+<h2 id="loxjava">Lox.java</h2>
+<ul>
+<li><code>main</code></li>
+<li><code>runPrompt</code>, <code>runFile</code></li>
+<li><code>run</code></li>
+<li><code>error</code>, <code>report</code>
+<ul>
+<li>可能的错误来自于三个过程，不同过程的错误处理方式也不同
+<ul>
+<li>静态过程：1.scan的时候发现不规范的字符导致的此法错误；2.pasre的时候发现无法闭合规则导致的语法错误</li>
+<li>动态过程（Runtime Error）：运行时产生的计算错误，如整数和字符串相加</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="tokentypejava">TokenType.java</h2>
+<ul>
+<li>定义了一系列TokenType</li>
+</ul>
+<h2 id="tokenjava">Token.java</h2>
+<ul>
+<li>定义了Token类，包含了type，原文lexeme，值literal和所在的行数line</li>
+</ul>
+<pre><code class="language-java"><div><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Token</span> </span>{
+    <span class="hljs-keyword">final</span> TokenType type;
+    <span class="hljs-keyword">final</span> String lexeme;
+    <span class="hljs-keyword">final</span> Object literal;
+    <span class="hljs-keyword">final</span> <span class="hljs-keyword">int</span> line; 
+
+    Token(TokenType type, String lexeme, Object literal, <span class="hljs-keyword">int</span> line) {
+        <span class="hljs-keyword">this</span>.type = type;
+        <span class="hljs-keyword">this</span>.lexeme = lexeme;
+        <span class="hljs-keyword">this</span>.literal = literal;
+        <span class="hljs-keyword">this</span>.line = line;
+    }
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> String <span class="hljs-title">toString</span><span class="hljs-params">()</span> </span>{
+        <span class="hljs-keyword">return</span> type + <span class="hljs-string">" "</span> + lexeme + <span class="hljs-string">" "</span> + literal;
+    }
+}
+</div></code></pre>
+<hr>
+<h2 id="scannerjava">Scanner.java</h2>
+<ul>
+<li>
+<p>Scanner类的属性</p>
+<ul>
+<li>source</li>
+<li>List&lt;Token&gt; tokens</li>
+<li>current, start, line</li>
+<li>keywords</li>
+</ul>
+</li>
+<li>
+<p>外部调用</p>
+<ul>
+<li><code>scanToken</code></li>
+</ul>
+<pre><code class="language-java"><div>  <span class="hljs-function">List&lt;Token&gt; <span class="hljs-title">scanTokens</span><span class="hljs-params">()</span> </span>{
+      <span class="hljs-keyword">while</span> (!isAtEnd()) {
+          <span class="hljs-comment">// We are at the beginning of the next lexeme.</span>
+          start = current;
+          scanToken();
+      }
+      tokens.add(<span class="hljs-keyword">new</span> Token(EOF, <span class="hljs-string">""</span>, <span class="hljs-keyword">null</span>, line));
+      <span class="hljs-keyword">return</span> tokens;
+  }
+</div></code></pre>
+</li>
+</ul>
+<blockquote>
+<p>功能函数实现对全局token序列的读取和分析，维护当前的lexeme和其位置，生成Token对象保存到list中</p>
+</blockquote>
+<ul>
+<li>功能函数
+<ul>
+<li><code>advance</code></li>
+<li><code>peek</code>, <code>peekNext</code></li>
+<li><code>match</code></li>
+<li><code>addToken</code></li>
+<li><code>isAtEnd</code>, <code>isDigt</code>, <code>isAlpha</code>, <code>isAlphaNumeric</code></li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p><code>scan</code>不采用正则表达式而用swith case的方式处理各种lexeme</p>
+</blockquote>
+<ul>
+<li>核心函数
+<ul>
+<li><strong><code>scan</code></strong></li>
+<li><code>string</code>, <code>number</code>, <code>comment</code>, <code>identifier</code></li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-java"><div><span class="hljs-keyword">switch</span> (c) {
+        <span class="hljs-comment">//数值运算</span>
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'('</span>: addToken(LEFT_PAREN); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">')'</span>: addToken(RIGHT_PAREN); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'{'</span>: addToken(LEFT_BRACE); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'}'</span>: addToken(RIGHT_BRACE); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">','</span>: addToken(COMMA); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'.'</span>: addToken(DOT); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'-'</span>: addToken(MINUS); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'+'</span>: addToken(PLUS); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">';'</span>: addToken(SEMICOLON); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'*'</span>: addToken(STAR); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'!'</span>: addToken(match(<span class="hljs-string">'='</span>) ? BANG_EQUAL : BANG); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'='</span>: addToken(match(<span class="hljs-string">'='</span>) ? EQUAL_EQUAL : EQUAL); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'&lt;'</span>: addToken(match(<span class="hljs-string">'='</span>) ? LESS_EQUAL : LESS); <span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'&gt;'</span>: addToken(match(<span class="hljs-string">'='</span>) ? GREATER_EQUAL : GREATER); <span class="hljs-keyword">break</span>;
+        <span class="hljs-comment">//逻辑运算</span>
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'o'</span>: <span class="hljs-keyword">if</span>(peek()==<span class="hljs-string">'r'</span>) addToken(OR);<span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'a'</span>:
+        <span class="hljs-comment">//注释</span>
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'/'</span>:
+            <span class="hljs-keyword">if</span>(match(<span class="hljs-string">'/'</span>)){
+                <span class="hljs-keyword">while</span>(peek()!=<span class="hljs-string">'\n'</span>&amp;&amp;!isAtEnd()) advance(); 
+            }
+            <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(match(<span class="hljs-string">'*'</span>)){
+                comment();
+            }
+            <span class="hljs-keyword">else</span> addToken(SLAH);
+            <span class="hljs-keyword">break</span>;
+        <span class="hljs-comment">//空字符，换行字符</span>
+        <span class="hljs-keyword">case</span> <span class="hljs-string">' '</span>:<span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'\r'</span>:<span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'\t'</span>:<span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'\n'</span>:line++;<span class="hljs-keyword">break</span>;
+        <span class="hljs-comment">//string</span>
+        <span class="hljs-keyword">case</span> <span class="hljs-string">'"'</span>:string();<span class="hljs-keyword">break</span>;
+        <span class="hljs-keyword">default</span>: 
+        <span class="hljs-keyword">if</span>(isDigit(c)) number();
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(isAlpha(c)) identifier();
+        <span class="hljs-keyword">else</span>
+        Lox.error(line, <span class="hljs-string">"Unexcepted character."</span>); <span class="hljs-keyword">break</span>;<span class="hljs-comment">//每次scan都会遍历全部的长度，每次遇到不规范的字符报一次错</span>
+    }
+}
+</div></code></pre>
+<hr>
+<h2 id="exprjava-abstrct-class">Expr.java (abstrct class)</h2>
+<ul>
+<li>属性
+<ul>
+<li>interface <strong>visitor</strong></li>
+</ul>
+</li>
+<li>子类
+<ul>
+<li>
+<blockquote>
+<p>每个子类中包含自己的构造函数和一个重载的accept函数，accept的参数为visitor，在其中调用visitor对应不同expr子类的方法。该方式为java的一种设计模式——Visitor Pattern。</p>
+</blockquote>
+</li>
+<li>static class <strong>Binary</strong></li>
+<li>static class <strong>Unary</strong></li>
+<li>static class <strong>Literal</strong></li>
+<li>static class <strong>Grouping</strong></li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-java"><div><span class="hljs-class"><span class="hljs-keyword">interface</span> <span class="hljs-title">Visitor</span>&lt;<span class="hljs-title">R</span>&gt; </span>{
+    <span class="hljs-function">R <span class="hljs-title">visitBinaryExpr</span><span class="hljs-params">(Binary expr)</span></span>;
+    <span class="hljs-function">R <span class="hljs-title">visitGroupingExpr</span><span class="hljs-params">(Grouping expr)</span></span>;
+    <span class="hljs-function">R <span class="hljs-title">visitLiteralExpr</span><span class="hljs-params">(Literal expr)</span></span>;
+    <span class="hljs-function">R <span class="hljs-title">visitUnaryExpr</span><span class="hljs-params">(Unary expr)</span></span>;
+}
+
+<span class="hljs-keyword">abstract</span> &lt;R&gt; <span class="hljs-function">R <span class="hljs-title">accept</span><span class="hljs-params">(Visitor&lt;R&gt; visitor)</span></span>;
+
+<span class="hljs-comment">//子类中的accept重载示例</span>
+<span class="hljs-meta">@Override</span>
+&lt;R&gt; <span class="hljs-function">R <span class="hljs-title">accept</span><span class="hljs-params">(Visitor&lt;R&gt; visitor)</span> </span>{
+    <span class="hljs-keyword">return</span> visitor.visitBinaryExpr(<span class="hljs-keyword">this</span>);
+}
+</div></code></pre>
+<h2 id="stmtjavaabstract-class">Stmt.java(abstract class)</h2>
+<ul>
+<li>属性
+<ul>
+<li>interface <strong>visitor</strong></li>
+</ul>
+</li>
+<li>子类
+<ul>
+<li>static class <strong>Print</strong></li>
+<li>static class <strong>Expression</strong></li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p>将之前的expression作为statement的其中一种子类，并完善如打印、赋值等操作。</p>
+</blockquote>
+<pre><code class="language-java"><div><span class="hljs-class"><span class="hljs-keyword">interface</span> <span class="hljs-title">Visitor</span>&lt;<span class="hljs-title">R</span>&gt; </span>{
+    <span class="hljs-function">R <span class="hljs-title">visitExpressionStmt</span><span class="hljs-params">(Expression stmt)</span></span>;
+    <span class="hljs-function">R <span class="hljs-title">visitPrintStmt</span><span class="hljs-params">(Print stmt)</span></span>;
+}
+<span class="hljs-keyword">abstract</span> &lt;R&gt; <span class="hljs-function">R <span class="hljs-title">accept</span><span class="hljs-params">(Visitor&lt;R&gt; visitor)</span></span>;
+
+<span class="hljs-comment">//子类中的accept重载示例</span>
+<span class="hljs-meta">@Override</span>
+&lt;R&gt; <span class="hljs-function">R <span class="hljs-title">accept</span><span class="hljs-params">(Visitor&lt;R&gt; visitor)</span> </span>{
+    <span class="hljs-keyword">return</span> visitor.visitExpressionStmt(<span class="hljs-keyword">this</span>);
+}
+</div></code></pre>
+<hr>
+<h2 id="paeserjava">Paeser.java</h2>
+<blockquote>
+<p><strong>展开规则</strong>：</p>
+<ol>
+<li>program   → statement* EOF ;</li>
+<li>statement → exprStmt | printStmt ;</li>
+<li>exprStmt  → expression &quot;;&quot; ;</li>
+<li>printStmt → &quot;print&quot; expression &quot;;&quot; ;</li>
+</ol>
+</blockquote>
+<ul>
+<li>
+<p>属性</p>
+<ul>
+<li>tokens</li>
+<li>current</li>
+<li>List&lt;Stmt&gt; statements</li>
+</ul>
+</li>
+<li>
+<p>调用方法</p>
+</li>
+</ul>
+<ol>
+<li><s>返回 <code>Expr</code>类</s></li>
+</ol>
+<pre><code class="language-java"><div><span class="hljs-function">Expr <span class="hljs-title">parse</span><span class="hljs-params">()</span> </span>{
+    <span class="hljs-keyword">try</span> {
+        <span class="hljs-keyword">return</span> expression();
+    } <span class="hljs-keyword">catch</span> (ParseError error) {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">null</span>;
+    }
+}
+</div></code></pre>
+<ol start="2">
+<li>返回 List&lt;<code>Stmt</code>&gt;</li>
+</ol>
+<pre><code class="language-java"><div><span class="hljs-function">List&lt;Stmt&gt; <span class="hljs-title">parse</span><span class="hljs-params">()</span> </span>{
+    List&lt;Stmt&gt; statements = <span class="hljs-keyword">new</span> ArrayList&lt;&gt;();
+    <span class="hljs-keyword">while</span> (!isAtEnd()) {
+        statements.add(statement());
+    }
+
+    <span class="hljs-keyword">return</span> statements;
+}
+</div></code></pre>
+<ul>
+<li>功能函数
+<ul>
+<li>
+<blockquote>
+<p>功能函数和scanner的类似，实现对全局token序列的读取和分析，多了一个特殊的ParserError类(extends RuntimeException)用来处理parse过程中遇到的错误</p>
+</blockquote>
+</li>
+<li><code>advance</code></li>
+<li><code>peek</code>, <code>previous</code></li>
+<li><code>check</code>, <code>match</code></li>
+<li><code>isAtEnd</code></li>
+<li><strong><code>error</code></strong></li>
+<li><strong><code>synchronize</code></strong>, <code>consume</code>
+<ul>
+<li>实现对错误的处理，discard当前的tokens直到下一个条语句的开头(暂时无法处理for语句内部的token错误)</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-java"><div><span class="hljs-function"><span class="hljs-keyword">private</span> ParseError <span class="hljs-title">error</span><span class="hljs-params">(Token token, String message)</span> </span>{
+    <span class="hljs-comment">//returns it instead of throwing because we want to </span>
+    <span class="hljs-comment">//let the caller decide whether to unwind or not</span>
+    Lox.error(token, message);
+    <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> ParseError();
+}
+</div></code></pre>
+<pre><code class="language-java"><div><span class="hljs-function"><span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title">synchronize</span><span class="hljs-params">()</span> </span>{
+    advance();
+
+    <span class="hljs-keyword">while</span> (!isAtEnd()) {
+        <span class="hljs-comment">//Discard Tokens Until we’re right at the beginning of the next statement</span>
+        <span class="hljs-keyword">if</span> (previous().type == SEMICOLON)
+            <span class="hljs-keyword">return</span>;
+
+        <span class="hljs-keyword">switch</span> (peek().type) {
+            <span class="hljs-keyword">case</span> CLASS:
+            <span class="hljs-keyword">case</span> FUN:
+            <span class="hljs-keyword">case</span> VAR:
+            <span class="hljs-keyword">case</span> FOR:
+            <span class="hljs-keyword">case</span> IF:
+            <span class="hljs-keyword">case</span> WHILE:
+            <span class="hljs-keyword">case</span> PRINT:
+            <span class="hljs-keyword">case</span> RETURN:
+                <span class="hljs-keyword">return</span>;
+        }
+
+        advance();
+    }
+}
+</div></code></pre>
+<blockquote>
+<p>每个核心函数暂时只能处理一个现规则下的expr，调用Expr类中某个子类的构造函数生成该子类并返回，parser.parse()返回一个Expr子类对象，随后调用Interpreter类求值。<strong>最后得到的expr对象实际上是一颗AST树</strong>。</p>
+</blockquote>
+<ul>
+<li>核心函数
+<ul>
+<li>处理<code>Expr</code>类
+<ul>
+<li><code>expression</code></li>
+<li><code>equality</code></li>
+<li><code>comparision</code></li>
+<li><code>addtion</code></li>
+<li><code>mutiplication</code></li>
+<li><code>unary</code></li>
+<li><code>primary</code></li>
+</ul>
+</li>
+<li>处理<code>Stmt</code>类
+<ul>
+<li><code>statement</code></li>
+<li><code>printStatement</code></li>
+<li><code>expressionStatement</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="interpreterjavaimplements-exprvisitorobject-stmtvisitorvoid">Interpreter.java(implements Expr.Visitor&lt;Object&gt;, Stmt.Visitor&lt;Void&gt;)</h2>
+<blockquote>
+<p>void不是函数，是方法的修饰符，void的意思是该方法没有返回值，意思就是方法只会运行方法中的语句，但是不返回任何东西。 java.lang.Void是一种类型。例如给Void引用赋值null。通过Void类的源代码可以看到，Void类型不可以继承与实例化。
+<a href="https://blog.csdn.net/f641385712/article/details/80409211">其他用法参考此博文</a></p>
+</blockquote>
+<ul>
+<li>
+<p>辅助函数</p>
+<ul>
+<li><code>isTruthy</code>, <code>isEqual</code></li>
+</ul>
+</li>
+<li>
+<p>调用方法</p>
+<ul>
+<li><strong><code>evaluate</code></strong>
+<ul>
+<li>调用expr对象的accept方法计算单个expressiong的值</li>
+</ul>
+</li>
+<li><strong><code>execute</code></strong>
+<ul>
+<li>调用List&lt;Stmt&gt;中每一个Stmt对象的accept方法来执行该语句</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>重载接口</p>
+<ul>
+<li><code>Expr</code>类
+<ul>
+<li><code>visitLiteralExpr</code></li>
+<li><code>visitGroupingExpr</code></li>
+<li><code>visitUnaryExpr</code></li>
+<li><code>visitBinaryExpr</code> 根据left、right和operator来做运算，本质上是一个Post Order遍历树的过程</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-java"><div><span class="hljs-meta">@Override</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> Object <span class="hljs-title">visitBinaryExpr</span><span class="hljs-params">(Expr.Binary expr)</span> </span>{
+    Object left = evaluate(expr.left);
+    Object right = evaluate(expr.right);
+
+    <span class="hljs-keyword">switch</span> (expr.operator.type) {
+        <span class="hljs-keyword">case</span> GREATER:
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>) left &gt; (<span class="hljs-keyword">double</span>) right;
+        <span class="hljs-keyword">case</span> GREATER_EQUAL:
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>) left &gt;= (<span class="hljs-keyword">double</span>) right;
+        <span class="hljs-keyword">case</span> LESS:
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>) left &lt; (<span class="hljs-keyword">double</span>) right;
+        <span class="hljs-keyword">case</span> LESS_EQUAL:
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>) left &lt;= (<span class="hljs-keyword">double</span>)right;
+        <span class="hljs-keyword">case</span> MINUS:
+            checkNumberOperand(expr.operator, right);<span class="hljs-comment">//处理runtime error</span>
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>) left - (<span class="hljs-keyword">double</span>) right;
+        <span class="hljs-keyword">case</span> PLUS:<span class="hljs-comment">//string和number都有plus操作</span>
+            <span class="hljs-keyword">if</span> (left <span class="hljs-keyword">instanceof</span> Double &amp;&amp; right <span class="hljs-keyword">instanceof</span> Double) {
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>)left + (<span class="hljs-keyword">double</span>)right;
+            } 
+            <span class="hljs-keyword">if</span> (left <span class="hljs-keyword">instanceof</span> String &amp;&amp; right <span class="hljs-keyword">instanceof</span> String) {
+            <span class="hljs-keyword">return</span> (String)left + (String)right;
+            }
+        <span class="hljs-keyword">case</span> SLASH:
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>) left / (<span class="hljs-keyword">double</span>) right;
+        <span class="hljs-keyword">case</span> STAR:
+            <span class="hljs-keyword">return</span> (<span class="hljs-keyword">double</span>) left * (<span class="hljs-keyword">double</span>) right;
+        <span class="hljs-keyword">case</span> BANG_EQUAL: <span class="hljs-keyword">return</span> !isEqual(left, right);
+        <span class="hljs-keyword">case</span> EQUAL_EQUAL: <span class="hljs-keyword">return</span> isEqual(left, right);
+    }
+
+    <span class="hljs-comment">// Unreachable.</span>
+    <span class="hljs-keyword">return</span> <span class="hljs-keyword">null</span>;
+}
+</div></code></pre>
+
+    </body>
+    </html>
