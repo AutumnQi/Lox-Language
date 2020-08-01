@@ -97,6 +97,32 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     }
 
     @Override
+    public Object visitLogicExpr(Logic expr) {
+        Object left = evaluate(expr.left);
+        // if(expr.operator.type==AND){
+        //     if(!isTruthy(value)) return false;
+        //     Object right = evaluate(expr.right);
+        //     return isTruthy(left)&&isTruthy(right);
+        // } 
+        // else {
+        //     if(isTruthy(left)) return true;
+        //     Object right = evaluate(expr.right);
+        //     return isTruthy(left)||isTruthy(right);
+        // }
+        
+        //妙啊，此处选择返回真实值
+        if (expr.operator.type == TokenType.OR) {
+            if (isTruthy(left))
+                return left;
+        } else {
+            if (!isTruthy(left))
+                return left;
+        }
+
+        return evaluate(expr.right);
+    }
+
+    @Override
     public Object visitVariableExpr(Variable expr) {
         return environment.get(expr.name);
     }
@@ -195,6 +221,25 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
         } finally {
             this.environment = previous;//恢复之前的env
         }
+    }
+
+    @Override
+    public Void visitIfStmt(If stmt) {
+        if(isTruthy(evaluate(stmt.condition))){
+            execute(stmt.thenBranch);
+        }
+        else if(stmt.elseBranch != null){
+            execute(stmt.elseBranch);
+        }
+        return null;
+    }
+
+    @Override
+    public Viod visitWhileStmt(While stmt) {
+        while(isTruthy(evaluate(stmt.condition))){
+            execute(stmt.body);
+        }
+        return null;
     }
 
     @Override

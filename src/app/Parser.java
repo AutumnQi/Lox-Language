@@ -1,48 +1,17 @@
 package com.craftinginterpreters.lox;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import jdk.nashorn.internal.parser.Token;
 import jdk.nashorn.internal.parser.TokenType;
 import sun.tools.tree.VarDeclarationStatement;
+import sun.tools.tree.WhileStatement;
 
 import static com.craftinginterpreters.lox.TokenType.*;
-
-/*
-program     → declaration* EOF ;
-
-declaration → varDecl
-          | statement ;
-
-varDecl → "var" IDENTIFIER ( "=" expression )? ";" ;
-
-statement → exprStmt | printStmt ;
-exprStmt  → expression ";" ;
-printStmt → "print" expression ";" ;
-
-primary → "true" | "false" | "nil"
-        | NUMBER | STRING
-        | "(" expression ")"
-        | IDENTIFIER ;
-
-expression → literal
-           | unary
-           | binary
-           | grouping ;
-           | assignment ;
-
-assignment → IDENTIFIER "=" assignment
-           | equality ;
-
-literal    → NUMBER | STRING | "false" | "true" | "nil" ;
-grouping   → "(" expression ")" ;
-unary      → ( "-" | "!" ) expression ;
-binary     → expression operator expression ;
-operator   → "==" | "!=" | "<" | "<=" | ">" | ">="
-           | "+"  | "-"  | "*" | "/" ;
-*/
 
 class Parser {
     private static class ParseError extends RuntimeException{};
@@ -155,7 +124,7 @@ class Parser {
         // }
         // return equality();
 
-        Expr expr = equality();
+        Expr expr = or();
         if (match(EQUAL)) {
             Token equals = previous();
             //不使用while，即不允许多重赋值
@@ -169,6 +138,26 @@ class Parser {
             error(equals, "Invalid assignment target.");
         }
 
+        return expr;
+    }
+
+    private Expr or() {
+        Expr expr = and();
+        while(match(OR)){
+            Token operator = previous();
+            Expr tmp = and();
+            expr = new Expr.Logic(expr, operator, tmp);
+        }
+        return expr;
+    }
+
+    private Expr and() {
+        Expr expr = equality();
+        while(match(AND)) {
+            Token operator = previous();
+            Expr tmp = equality();
+            expr = new Expr.Logic(expr, operator, tmp);
+        }
         return expr;
     }
 
@@ -192,7 +181,7 @@ class Parser {
 
     private Expr comparison() {
         // comparison → addition ( ( ">" | ">=" | "<" | "<=" ) addition )*
-        Expr expr = addtion();
+        Expr expr = addition();
 
         while (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
             Token operator = previous();
@@ -269,21 +258,6 @@ class Parser {
 
     /********************************************* Parse Statement **************************************************/
 
-    /*
-    program   → statement* EOF ;
-
-    declaration → varDecl
-                | statement ;
-
-    varDecl → "var" IDENTIFIER ( "=" expression )? ";" ;
-
-    statement → exprStmt
-            | printStmt ;
-
-    exprStmt  → expression ";" ;
-    printStmt → "print" expression ";" ;
-    */
-
     private Stmt declaration() {
         try{
             if(match(VAR)) return varDeclarationStatement();
@@ -306,9 +280,81 @@ class Parser {
 
     private Stmt statement() {
         if (match(PRINT)) return printStatement();
+        if (match(IF)) return ifStatement();
+        if (match(WHILE)) return whileStatement();
+        if (match(FOR)) return forStatement();
         if (match(LEFT_BRACE)) return new Stmt.Block(block());
         if (match(VAR)) return varDeclarationStatement();
         return expressionStatement();
+    }
+
+    private Stmt ifStatement(){
+        consume(LEFT_PAREN, "Expect '(' after 'if'.");
+        Expr condition = expression();
+        consume(RIGHT_PAREN, "Expect ')' after if condition.");
+        Stmt thenBranch = statement();
+        Stmt elseBranch = null;
+        if(match(ELSE)) elseBranch = statement();//此处后一个else直接绑定前一个if，除非在有 } 的情况下
+        return new Stmt.If(condition, thenBranch, elseBranch);
+    }
+
+    private Stmt whileStatement() {
+        consume(LEFT_PAREN, "Expect '(' after 'while'.");
+        Expr condition = expression();
+        consume(RIGHT_PAREN, "Expect ')' after while condition.");
+        Stmt body = statement();
+        return new Stmt.While(condition,body);
+    }
+
+    // 新建一个for ast node的parse方法
+    // private Stmt forStatement() {
+    //     consume(LEFT_PAREN, "Expect '(' after 'for'.");
+    //     Stmt initializer = statement();
+    //     Expr condition = expression();
+    //     consume(LEFT_PAREN, "Expect ';' after 'for condition'.");
+    //     Expr increment = expression();
+    //     consume(RIGHT_PAREN, "Expect ')' after for condition.");
+    //     Stmt body = statement();
+    //     return new Stmt.For(initializer,condition,increment,body);
+    // }
+
+    // 将for解析为whileStmt节点，实现desugaring
+    private Stmt forStatement() {
+        consume(LEFT_PAREN, "Expect '(' after 'for'.");
+        Stmt initializer;
+        if (match(SEMICOLON)) {
+            initializer = null;
+        } else if (match(VAR)) {
+            initializer = varDeclaration();
+        } else {
+            initializer = expressionStatement();
+        }
+
+        Expr condition = null;
+        if (!check(SEMICOLON)) {
+            condition = expression();
+        }
+        consume(SEMICOLON, "Expect ';' after loop condition.");
+
+        Expr increment = null;
+        if (!check(RIGHT_PAREN)) {
+            increment = expression();
+        }
+        consume(RIGHT_PAREN, "Expect ')' after for clauses.");
+
+        Stmt body = statement();
+
+        if (condition == null) condition = new Expr.Literal(true);
+        if (increment != null) {
+            body = new Stmt.Block(Arrays.asList(body, new Stmt.Expression(increment)));
+        }
+        body = new Stmt.While(condition, body);
+
+        if (initializer != null) {
+            body = new Stmt.Block(Arrays.asList(initializer,body));
+        }
+              
+        return body;
     }
 
     private Stmt varDeclarationStatement() {

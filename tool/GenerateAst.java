@@ -16,6 +16,7 @@ public class GenerateAst {
         String outputDir = args[0];
         defineAst(outputDir, "Expr", Arrays.asList(//Expr AST的节点
             "Assign   : Token name, Expr value",
+            "Logic    : Expr left, Token operator, Expr right",
             "Binary   : Expr left, Token operator, Expr right",
             "Grouping : Expr expression", 
             "Literal  : Object value", 
@@ -24,6 +25,9 @@ public class GenerateAst {
         ));
         
         defineAst(outputDir, "Stmt", Arrays.asList(
+            "If         : Expr condition, Stmt thenBranch, Stmt elseBranch",
+            //"For        : Stmt initializer, Expr condition, Expr increment, Stmt body",
+            "While      : Expr condition, Stmt body",
             "Block      : List<Stmt> statements",
             "Expression : Expr expression",
             "Print      : Expr expression",
