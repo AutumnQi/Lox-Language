@@ -66,11 +66,11 @@ public class Lox {
         //System.out.println(new AstPrinter().print(expression));
     }
 
-    static void error(int line, String message) {
+    static void error(int line, String message) {//处理scan时的错误
         report(line, "", message);
     }
 
-    static void error(Token token, String message) {//处理static error
+    static void error(Token token, String message) {//处理parse时的错误
         if (token.type == TokenType.EOF) {
             report(token.line, " at end", message);
         } else {

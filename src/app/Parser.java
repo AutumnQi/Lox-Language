@@ -223,10 +223,35 @@ class Parser {
         if (match(BANG, MINUS)) {
             Token operator = previous();
             Expr right = unary();
-            expr = new Expr.Unary(operator, right);
+            return new Expr.Unary(operator, right);
+        }
+        return call();
+    }
+
+    private Expr call() {
+        Expr expr = primary();
+        while(true){
+            if (match(LEFT_PAREN)) {
+                expr = finishCall(expr);
+            }
+            else break;
         }
 
-        return primary();
+        return expr;
+    }
+
+    private Expr finishCall(Expr callee) {
+        List<Expr> arguments = new ArrayList<>();
+        if (!check(RIGHT_PAREN)) {
+            do{
+                if (arguments.size() >= 255) {
+                    error(peek(), "Cannot have more than 255 arguments.");
+                }
+                arguments.add(expression());
+            } while(match(COMMA));
+        }
+        Token paren = consume(RIGHT_PAREN, "Expect ')' after arguments.");
+        return new Expr.Call(callee,paren,arguments);
     }
 
     private Expr primary() {
@@ -260,6 +285,7 @@ class Parser {
 
     private Stmt declaration() {
         try{
+            if(match(FUN)) return function("function");
             if(match(VAR)) return varDeclarationStatement();
             return statement();
         } catch(ParseError error){
@@ -267,6 +293,46 @@ class Parser {
             return null;
         }
         
+    }
+
+    private Stmt varDeclarationStatement() {
+        Token name = consume(IDENTIFIER, "Expect variable name.");
+        Expr initializer = null;//变量的声明不要放在if block中
+        if(match(EQUAL)){
+            initializer = expression();
+        }
+        consume(SEMICOLON, "Expect ';' after variable declaration.");
+        return new Stmt.Var(name, initializer);
+
+    }
+
+    private Stmt function(String kind) {//kind是用来干嘛的？在定义函数时，kind=function
+        Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
+        consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+        List<Token> paramters = new ArrayList<>();
+        if(!check(RIGHT_PAREN)){
+            do{
+                if (parameters.size() >= 255) {
+                    error(peek(), "Cannot have more than 255 parameters.");
+                }
+
+                parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+            } while (match(COMMA));
+        }
+        consume(LEFT_PAREN, "Expect ')' after parameters.");
+        consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+        List<Stmt> body = block();
+        return new Stmt.Function(name, parameters, body);
+    }
+
+    private Stmt statement() {
+        if (match(PRINT)) return printStatement();
+        if (match(IF)) return ifStatement();
+        if (match(WHILE)) return whileStatement();
+        if (match(FOR)) return forStatement();
+        if (match(LEFT_BRACE)) return new Stmt.Block(block());
+        if (match(RETURN)) return returnStatement();
+        return expressionStatement();
     }
 
     private List<Stmt> block(){
@@ -277,16 +343,6 @@ class Parser {
         consume(RIGHT_BRACE, "Expect '}' after block.");
         return statements;
     } 
-
-    private Stmt statement() {
-        if (match(PRINT)) return printStatement();
-        if (match(IF)) return ifStatement();
-        if (match(WHILE)) return whileStatement();
-        if (match(FOR)) return forStatement();
-        if (match(LEFT_BRACE)) return new Stmt.Block(block());
-        if (match(VAR)) return varDeclarationStatement();
-        return expressionStatement();
-    }
 
     private Stmt ifStatement(){
         consume(LEFT_PAREN, "Expect '(' after 'if'.");
@@ -318,7 +374,7 @@ class Parser {
     //     return new Stmt.For(initializer,condition,increment,body);
     // }
 
-    // 将for解析为whileStmt节点，实现desugaring
+    // 将for解析为blockStmt节点，实现desugaring，将varDeclaration和increment的stmt拼接到主体的block中，完成局部环境的构建
     private Stmt forStatement() {
         consume(LEFT_PAREN, "Expect '(' after 'for'.");
         Stmt initializer;
@@ -357,21 +413,21 @@ class Parser {
         return body;
     }
 
-    private Stmt varDeclarationStatement() {
-        Token name = consume(IDENTIFIER, "Expect variable name.");
-        Expr initializer = null;//变量的声明不要放在if block中
-        if(match(EQUAL)){
-            initializer = expression();
-        }
-        consume(SEMICOLON, "Expect ';' after variable declaration.");
-        return new Stmt.Var(name, initializer);
-
-    }
-
     private Stmt printStatement() {
         Expr expr = expression();
         consume(SEMICOLON, "Expect ';' after value.");
         return new Stmt.Print(expr);
+    }
+
+    private Stmt returnStatement() {
+        Token keyword = previous();//处理没有return的情况，和python一样默认返回null
+        Expr value = null;
+        if (!check(SEMICOLON)) {
+            value = expression();
+        }
+
+        consume(SEMICOLON, "Expect ';' after return value.");
+        return new Stmt.Return(keyword, value);
     }
 
     private Stmt expressionStatement() {

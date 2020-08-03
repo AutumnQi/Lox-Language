@@ -1,13 +1,35 @@
 package com.craftinginterpreters.lox;
 
 import java.util.List;
+import java.util.ArrayList;
 
 import com.craftinginterpreters.lox.Expr.*;
 import com.craftinginterpreters.lox.Stmt.*;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类implement Expr&Stmt 类中定义的visitor接口
     //全局环境
-    private Environment environment = new Environment();
+    final Environment globals = new Environment();
+    private Environment environment = globals;
+
+    //构造函数，在globals中加入一个名为clock的函数对象，在构造函数中的函数称为natives functions 即内建函数
+    Interpreter() {
+        globals.define("clock", new LoxCallable() {
+            @Override
+            public int arity() {
+                return 0;
+            }
+
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                return (double) System.currentTimeMillis() / 1000.0;
+            }
+
+            @Override
+            public String toString() {
+                return "<native fn>";
+            }
+        });
+    }
 
     //外部调用接口
     void interpret(List<Stmt> statements){
@@ -154,6 +176,25 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     }
 
     @Override
+    public Object visitCallExpr(Call expr) {
+        Object callee = evaluate(expr.callee);
+        if (!(callee instanceof LoxCallable)) {// 运行时检查并抛出Exception
+            throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+        }
+        List<Object> arguments = new ArrayList<>();//argument是实际传入的Object
+        for (Expr argument : expr.arguments) {
+            arguments.add(evaluate(argument));
+        }
+
+        LoxCallable function = (LoxCallable) callee;
+        if (arguments.size() != function.arity()) {
+            throw new RuntimeError(expr.paren,
+                    "Expected " + function.arity() + " arguments but got " + arguments.size() + ".");
+        }
+        return function.call(this, arguments);
+    }
+
+    @Override
     public Object visitBinaryExpr(Binary expr) {
         Object left = evaluate(expr.left);
         Object right = evaluate(expr.right);
@@ -204,6 +245,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     /********************************************* Visit Statement **************************************************/
     
     @Override
+    public Void visitFunctionStmt(Function stmt) {//此处并非调用函数，而是定义函数的过程，将函数对象新增到环境中
+        LoxFunction function = new LoxFunction(stmt, environment);
+        environment.define(stmt.name.lexeme, function);
+        return null;
+    }
+
+    @Override
     public Void visitBlockStmt(Block stmt) {
         executeBlock(stmt.statements, new Environment(environment));//执行block时需要新建一个scope
         return null;
@@ -253,6 +301,15 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
         Object value = evaluate(stmt.expression);
         System.out.println(stringify(value));
         return null;
+    }
+
+    @Override
+    public Void visitReturnStmt(Return stmt) {
+        Object value  = null;
+        if(stmt.value!=null){
+            value = evaluate(stmt.value);
+        }
+        throw new Return(value);//使用runtimeException来跳出当前的block
     }
 
     @Override
