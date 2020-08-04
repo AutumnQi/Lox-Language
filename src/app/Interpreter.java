@@ -169,6 +169,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
             case MINUS:
                 checkNumberOperand(expr.operator, right);
                 return -(double) right;
+            default: break;
         }
 
         // Unreachable.
@@ -177,7 +178,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
 
     @Override
     public Object visitCallExpr(Call expr) {
-        Object callee = evaluate(expr.callee);
+        Object callee = evaluate(expr.callee);//在environment中寻找function对象
         if (!(callee instanceof LoxCallable)) {// 运行时检查并抛出Exception
             throw new RuntimeError(expr.paren, "Can only call functions and classes.");
         }
@@ -185,13 +186,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
         for (Expr argument : expr.arguments) {
             arguments.add(evaluate(argument));
         }
-
+        //检查参数数量是否匹配，TODO 4.有什么方式可以避免检查参数数量？Smalltalk语言为什么没有这种问题？
         LoxCallable function = (LoxCallable) callee;
         if (arguments.size() != function.arity()) {
             throw new RuntimeError(expr.paren,
                     "Expected " + function.arity() + " arguments but got " + arguments.size() + ".");
         }
-        return function.call(this, arguments);
+        return function.call(this, arguments);//真正执行
     }
 
     @Override
@@ -219,7 +220,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
             case MINUS:
                 checkNumberOperands(expr.operator, left, right);
                 return (double) left - (double) right;
-            case PLUS://string和number都有plus操作 #TODO 增加数字+字符串自动转化为字符串的功能
+            case PLUS://string和number都有plus操作 #TODO 2.增加数字+字符串自动转化为字符串的功能
                 if (left instanceof Double && right instanceof Double) {
                   return (double)left + (double)right;
                 } 
@@ -236,6 +237,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
                 return (double) left * (double) right;
             case BANG_EQUAL: return !isEqual(left, right);
             case EQUAL_EQUAL: return isEqual(left, right);
+            default: break;
         }
 
         // Unreachable.
@@ -262,6 +264,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
         try{
             this.environment = environment;//用新的scope覆盖当前的Interpreter的env
             for(Stmt statement : statements){
+                //TODO 3.处理break的情况
                 execute(statement);
             }
         } catch (RuntimeError error){

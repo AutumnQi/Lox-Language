@@ -86,6 +86,7 @@ class Parser {
                 case PRINT:
                 case RETURN:
                     return;
+                default: break;
             }
 
             advance();
@@ -250,7 +251,7 @@ class Parser {
                 arguments.add(expression());
             } while(match(COMMA));
         }
-        Token paren = consume(RIGHT_PAREN, "Expect ')' after arguments.");
+        Token paren = consume(RIGHT_PAREN, "Expect ')' after arguments.");//Question: 这里的paren作何用？在其他的callabel对象起作用吗？
         return new Expr.Call(callee,paren,arguments);
     }
 
@@ -307,6 +308,7 @@ class Parser {
     }
 
     private Stmt function(String kind) {//kind是用来干嘛的？在定义函数时，kind=function
+        //TODO: 1.Add anonymous function syntax
         Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
         consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
         List<Token> paramters = new ArrayList<>();
