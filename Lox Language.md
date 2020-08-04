@@ -2,7 +2,7 @@
 
 # Lox Language
 
-## Lox.java
+## 0 Lox.java
 
 - `main`
 - `runPrompt`, `runFile`
@@ -14,7 +14,7 @@
 
 ---
 
-## 1. Token 定义& Scanner 的实现
+## 1. 编译器前端：Token 定义& Scanner 的实现
 
 ### 1.1 TokenType.java
 
@@ -130,7 +130,7 @@ switch (c) {
 
 ---
 
-## 2. AST节点定义&生成
+## 2. 编译器前端：AST节点定义&生成
 
 ### 2.1  Expr.java
 
@@ -442,9 +442,71 @@ private void synchronize() {
 
 ---
 
-## 3 解释执行AST
+## 3 编译器前端：Parse阶段AST中的Local变量合法性检查
 
-### 3.1 Interpreter.java
+### 3.1 [Resolver.java](./src/com/craftinginterpreters/lox/Resolver.java)
+
+> After the parser produces the syntax tree, but before the interpreter starts executing it, we’ll do a single walk over the tree to resolve all of the variables it contains.
+>
+> 用一个mini-interpreter来对AST进行剪枝，主要解决变量绑定的问题，和interpreter一样是对visitor接口的implement，但只专注变量的管理，通过一个栈来管理当前的scope，在新的scope中，每个新声明的变量都有一个boolean值来确认其是否已经初始化。如此一来即可在parse阶段完成多次声明后的冲突。
+
+- 目标节点
+  - A block statement introduces a new scope for the statements it contains.
+  - A function declaration introduces a new scope for its body and binds its parameters in that scope.
+  - A variable declaration adds a new variable to the current scope.
+  - Variable and assignment expressions need to have their variables resolved.
+  
+- 属性
+
+  - private final Interpreter `interpreter`
+  - private final Stack<Map<String,Boolean>> `scopes` = new Stack<>()
+    - 每一个scope包含在其中声明的variable，以完成变量的合法性检查
+  - private FunctionType currentFunction = FunctionType.NONE.
+    - 指示当前处于那类function体中，用来检测一些语法错误如不在function内的return语句
+
+- 构造方法
+
+  - Resolver(Interpreter interpreter) {this.interpreter = interpreter;} 绑定interpreter
+
+- 调用方法
+
+  - ​	`resolve(List<\Stmt> statements)`
+
+- 辅助函数
+
+  - 三种`resolve` 分别对应输入参数为Expr、Stmt和List<\Stmt>，通过accept调用自身子类的visit接口，完成变量名的检查
+  - `resolveLocal` 在scopes栈中依次向前寻找包含该变量的scope，调用Interpreter的resolve方法
+  - `resolveFunction` 新建一个scope，将函数声明中的参数分别`declare`、`define`后，再对body进行resolve，完成函数内部的变量合法性检查
+
+- 重载visitXXX接口
+
+  - 在不涉及到变量赋值、声明和block时，直接调用resolve来进行变量检查。
+    
+    - 1. 在变量的声明中，首先`declare`变量，随后通过`resolve`检查initializer，没有问题则`define`变量，结束后
+    
+    - 2. 在函数的声明中，首先`declare`、`define`函数名，随后通过`resolveFunction`检查body中的变量使用
+  3. 在block中，首先新建一个scope，通过`resolve`检查body中所有的statements后结束当前的scope
+    
+- `Expr`类
+  
+    - `visitLogicExpr`
+    - `visitLiteralExpr`
+  - ....
+  
+- `Stmt`类
+  
+    - `visitBlockStmt`
+  - .....
+  
+  
+
+
+
+---
+
+## 4 编译器后端：解释执行AST
+
+### 4.1 Interpreter.java
 
 >implements Expr.Visitor\<Object>, Stmt.Visitor\<Void> 完善之前定义类的visit接口
 >
@@ -552,7 +614,7 @@ private void executeBlock(List<Stmt> statements, Environment environment) {
 }
 ```
 
-### 3.2 LoxFunction.java
+### 4.2 LoxFunction.java
 
 > 对LoxCallable抽象接口的一种implement
 
@@ -583,31 +645,31 @@ private void executeBlock(List<Stmt> statements, Environment environment) {
     }
 ```
 
-### 3.3 LoxCallable.java
+### 4.3 LoxCallable.java
 
 > ​	可调用接口的抽象接口  #Question: 这里为什么要设计成接口？
 
 - 属性
   - int arity();//需要的参数的数量
-  - Object call(Interpreter interpreter, List<Object> arguments);
+  - Object call(Interpreter interpreter, List<\Object> arguments);
   - String toString();//在print时被调用
 
-### 3.4 Return.java
+### 4.4 Return.java
 
-> 继承RuntimeException的类，实现return跳出当前的页帧并返回值（默认没有return则返回null）
+> 继承RuntimeException的类，实现return跳出当前的页帧并返回值到上一个页帧（默认没有return则返回null）
 
 - 属性
   - final Object `value`
 - 构造方法
   - Return(Object value){ super(null, null, false, false);  this.value = `value`; }
 
----
 
-## 4. 全局变量和局部变量
 
-<img src="/Users/inlab/Documents/scope.png" alt="全局变量和局部变量的关系" style="zoom:35%;" />
+## 4. 环境管理：全局变量和局部变量
 
-### 4.1 Environment.java
+<img src="pics/scope.png" alt="全局变量和局部变量的关系" style="zoom:35%;" />
+
+### 5.1 Environment.java
 
 > 全局变量和局部变量的覆盖关系如上图所示，local scope中的变量继承上一层级，在该scope中发生的修改会在该scope中生效（即覆盖shadow），但在该scope结束后恢复到进入前的状态。
 >
@@ -629,12 +691,18 @@ private void executeBlock(List<Stmt> statements, Environment environment) {
 
   - `define(String name,Object value)`
 
+  - `ancestor (int distance)` 根据distance顺着enclosing链表向上找到目标enclosing
+  
   - `get(Token token)`
+  
+  - `getAt（int distance, Token name）`
+  
+  - `assign`
 
-### 4.2 Closure
+### 5.2 Closure
 
-- 当前每个函数的closure其实是指向当前environment的对象指针，在当前的environment发生变化后closure也会随之发生变化，造成可能多次执行函数的结果不同，为了解决这个问题，需要引入Persistent Environment
-- **persistent data structures**：
+- 当前每个函数的closure其实是指向当前environment的对象指针，在当前的environment发生变化后closure也会随之发生变化，造成可能多次执行函数的结果不同，为了解决这个问题，需要引入Persistent Environment。
+- **persistent data structures**：在每次使用data时创建一个新的副本而不是指向当前的data
 
 ---
 

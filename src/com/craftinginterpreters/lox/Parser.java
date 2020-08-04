@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import jdk.nashorn.internal.parser.Token;
-import jdk.nashorn.internal.parser.TokenType;
-import sun.tools.tree.VarDeclarationStatement;
-import sun.tools.tree.WhileStatement;
+// import jdk.nashorn.internal.parser.Token;
+// import jdk.nashorn.internal.parser.TokenType;
+// import sun.tools.tree.VarDeclarationStatement;
+// import sun.tools.tree.WhileStatement;
 
 import static com.craftinginterpreters.lox.TokenType.*;
 
@@ -186,7 +186,7 @@ class Parser {
 
         while (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
             Token operator = previous();
-            Expr right = addtion();
+            Expr right = addition();
             expr = new Expr.Binary(expr, operator, right);
         }
 
@@ -277,8 +277,6 @@ class Parser {
             return new Expr.Variable(previous());
         }
 
-        if (match(LEFT_BRACE)) return new Stmt.Block(block());
-
         throw error(peek(), "Expect expression.");
     }
 
@@ -311,7 +309,7 @@ class Parser {
         //TODO: 1.Add anonymous function syntax
         Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
         consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
-        List<Token> paramters = new ArrayList<>();
+        List<Token> parameters = new ArrayList<>();
         if(!check(RIGHT_PAREN)){
             do{
                 if (parameters.size() >= 255) {
@@ -321,7 +319,7 @@ class Parser {
                 parameters.add(consume(IDENTIFIER, "Expect parameter name."));
             } while (match(COMMA));
         }
-        consume(LEFT_PAREN, "Expect ')' after parameters.");
+        consume(RIGHT_PAREN, "Expect ')' after parameters.");
         consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
         List<Stmt> body = block();
         return new Stmt.Function(name, parameters, body);
@@ -383,7 +381,7 @@ class Parser {
         if (match(SEMICOLON)) {
             initializer = null;
         } else if (match(VAR)) {
-            initializer = varDeclaration();
+            initializer = varDeclarationStatement();
         } else {
             initializer = expressionStatement();
         }

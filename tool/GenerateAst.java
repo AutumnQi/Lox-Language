@@ -33,7 +33,7 @@ public class GenerateAst {
             "Block      : List<Stmt> statements",
             "Expression : Expr expression",
             "Print      : Expr expression",
-            "Return     : Token keyword, Expr value",
+            "Return     : Token keyword, Expr expression",
             "Var        : Token name, Expr initializer"//变量的声明节点
         ));
     }

@@ -6,8 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import jdk.nashorn.internal.parser.TokenType;
-import sun.tools.java.Identifier;
+// import jdk.nashorn.internal.parser.TokenType;
+// import sun.tools.java.Identifier;
 
 import static com.craftinginterpreters.lox.TokenType.*;
 
@@ -179,7 +179,7 @@ class Scanner {
                 else if(match('*')){
                     comment();
                 }
-                else addToken(SLAH);
+                else addToken(SLASH);
                 break;
             //空字符，换行字符
             case ' ':break;
@@ -187,7 +187,7 @@ class Scanner {
             case '\t':break;
             case '\n':line++;break;
             //string
-            case '"':string();break;
+            case '"':String();break;
             default: 
             if(isDigit(c)) number();
             else if(isAlpha(c)) identifier();

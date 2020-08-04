@@ -1,7 +1,9 @@
 package com.craftinginterpreters.lox;
 
 import java.util.List;
+import java.util.Map;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import com.craftinginterpreters.lox.Expr.*;
 import com.craftinginterpreters.lox.Stmt.*;
@@ -10,6 +12,8 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     //全局环境
     final Environment globals = new Environment();
     private Environment environment = globals;
+    private final Map<Expr, Integer> locals = new HashMap<>();//管理当前的局部变量
+
 
     //构造函数，在globals中加入一个名为clock的函数对象，在构造函数中的函数称为natives functions 即内建函数
     Interpreter() {
@@ -65,6 +69,18 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
         statement.accept(this);
     }
 
+    void resolve(Expr expr, int depth) {
+        locals.put(expr, depth);
+    }
+
+    private Object lookUpVariable(Token name, Expr expr) {
+        Integer distance = locals.get(expr);
+        if (distance != null) {
+            return environment.getAt(distance, name);
+        } 
+        return globals.get(name);
+    }
+
     private boolean isTruthy(Object object) {
         if (object == null) return false;
         if (object instanceof Boolean) return (boolean)object;
@@ -111,9 +127,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
 
     @Override
     public Object visitAssignExpr(Assign expr) {
-        Object value = evaluate(expr.expression);
+        Object value = evaluate(expr.value);
         Token name = expr.name;
-        environment.assign(name,value);
+        Integer distance = locals.get(expr);
+        if(distance!=null){
+            environment.assignAt(distance, name, value);
+        }
+        else environment.assign(name,value);
         //assignment is an expression that can be nested inside other expressions 如 print a=2; //2
         return value;
     }
@@ -146,7 +166,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
 
     @Override
     public Object visitVariableExpr(Variable expr) {
-        return environment.get(expr.name);
+        return lookUpVariable(expr.name, expr);
     }
 
     @Override
@@ -259,10 +279,10 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
         return null;
     }
 
-    private void executeBlock(List<Stmt> statements, Environment environment) {
+    public void executeBlock(List<Stmt> statements, Environment environment) {
         Environment previous = this.environment;//储存当前Interpreter的env
         try{
-            this.environment = environment;//用新的scope覆盖当前的Interpreter的env
+            this.environment = environment;//用新的env覆盖当前的Interpreter的env
             for(Stmt statement : statements){
                 //TODO 3.处理break的情况
                 execute(statement);
@@ -286,7 +306,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     }
 
     @Override
-    public Viod visitWhileStmt(While stmt) {
+    public Void visitWhileStmt(While stmt) {
         while(isTruthy(evaluate(stmt.condition))){
             execute(stmt.body);
         }
@@ -307,7 +327,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     }
 
     @Override
-    public Void visitReturnStmt(Return stmt) {
+    public Void visitReturnStmt(Stmt.Return stmt) {
         Object value  = null;
         if(stmt.value!=null){
             value = evaluate(stmt.value);
