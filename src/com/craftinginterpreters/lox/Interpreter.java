@@ -11,9 +11,10 @@ import com.craftinginterpreters.lox.Stmt.*;
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类implement Expr&Stmt 类中定义的visitor接口
     //全局环境
     final Environment globals = new Environment();
-    private Environment environment = globals;
-    private final Map<Expr, Integer> locals = new HashMap<>();//管理当前的局部变量
-
+    private Environment environment = globals;//当前运行的环境
+    private final Map<Expr, Integer> locals = new HashMap<>();//管理当前的局部变量 通过local中的distance，从变量最近一次被声明/赋值的env中进行取值，包含variable和this
+                                                            // Question：env不是一脉相承的吗，为什么要搞这么麻烦？Ans：在进入block后新建的env内无数据的复制，想要查找enclsing内的数据需要一个distance
+                                                            //Question：这里为什么要用Expr而不是String？Ans：String可能存在重名?
 
     //构造函数，在globals中加入一个名为clock的函数对象，在构造函数中的函数称为natives functions 即内建函数
     Interpreter() {
@@ -50,15 +51,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
         }
     }
 
-    // void interpret(Expr expression) {
-    //     try {
-    //         Object value = evaluate(expression);
-    //         System.out.println(stringify(value));
-    //     } catch (RuntimeError error) {
-    //         Lox.runtimeError(error);
-    //     }
-    // }
-
     //使用RUBY的语法，除了null和false对象都为true
     
     private Object evaluate(Expr expression) {//调用expr子类的accept计算值
@@ -76,7 +68,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     private Object lookUpVariable(Token name, Expr expr) {
         Integer distance = locals.get(expr);
         if (distance != null) {
-            return environment.getAt(distance, name);
+            return environment.getAt(distance, name.lexeme);
         } 
         return globals.get(name);
     }
@@ -216,6 +208,31 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     }
 
     @Override
+    public Object visitSetExpr(Set expr) {
+        Object instance = evaluate(expr.object);
+        if (instance instanceof LoxInstance) {// 运行时检查并抛出Exception
+            Object value = evaluate(expr.value);
+            ((LoxInstance)instance).set(expr.name,value);
+            return value;
+        }
+        throw new RuntimeError(expr.name, "Only instances have properties.");
+    }
+
+    @Override
+    public Object visitGetExpr(Get expr) {
+        Object instance = evaluate(expr.object);
+        if (instance instanceof LoxInstance) {// 运行时检查并抛出Exception
+            return ((LoxInstance)instance).get(expr.name);
+        }
+        throw new RuntimeError(expr.name, "Only instances have properties.");
+    }
+
+    @Override
+    public Object visitThisExpr(This expr) {
+        return lookUpVariable(expr.keyword, expr);
+    }
+
+    @Override
     public Object visitBinaryExpr(Binary expr) {
         Object left = evaluate(expr.left);
         Object right = evaluate(expr.right);
@@ -267,15 +284,28 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     /********************************************* Visit Statement **************************************************/
     
     @Override
+    public Void visitClassStmt(Stmt.Class stmt) {
+        environment.define(stmt.name.lexeme, null);
+        Map<String, LoxFunction> methods = new HashMap<>();
+        for (Stmt.Function method : stmt.methods) {
+            LoxFunction function = new LoxFunction(method, environment, method.name.lexeme.equals("init"));//这里多个instance的func不是同名了吗？Ans: LoxFunction是一个接口对象，此处的method不同于func，是定义在class的filed内的而非env
+            methods.put(method.name.lexeme, function);
+        }
+        LoxClass klass = new LoxClass(stmt.name.lexeme, methods);
+        environment.assign(stmt.name, klass);
+        return null;
+    }
+    
+    @Override
     public Void visitFunctionStmt(Function stmt) {//此处并非调用函数，而是定义函数的过程，将函数对象新增到环境中
-        LoxFunction function = new LoxFunction(stmt, environment);
+        LoxFunction function = new LoxFunction(stmt, environment, false);
         environment.define(stmt.name.lexeme, function);
         return null;
     }
 
     @Override
     public Void visitBlockStmt(Block stmt) {
-        executeBlock(stmt.statements, new Environment(environment));//执行block时需要新建一个scope
+        executeBlock(stmt.statements, new Environment(environment));//执行block时需要新建一个env
         return null;
     }
 

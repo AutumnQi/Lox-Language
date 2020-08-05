@@ -14,7 +14,7 @@ class Environment {
     }
 
     Environment(Environment enclosing) {
-        this.enclosing = enclosing;//继承的上一层级的环境
+        this.enclosing = enclosing;//上一层级的环境作为enclosing，但不会将values进行复制，而是借助resolver得到的locals来查找变量所在的环境
     }
 
     Environment ancestor(int distance) {
@@ -27,7 +27,7 @@ class Environment {
     }
 
     void define(String name, Object value) {
-        values.put(name, value);// 不检查变量是否已经存在，直接赋值
+        values.put(name, value);// 不检查变量是否已经存在，直接赋值,Question: 这里为什么要用String而非Assign中的Token？ Ans: 为了方便匿名函数、内建函数的实现，实现在没有token时也可以完成对象的建立
     }
 
     Object get(Token name){
@@ -45,8 +45,8 @@ class Environment {
         throw new RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
     }
 
-    Object getAt(int distance, Token name) {
-        return ancestor(distance).values.get(name.lexeme);
+    Object getAt(int distance, String name) {
+        return ancestor(distance).values.get(name);
     }
 
     void assign(Token name, Object value) {

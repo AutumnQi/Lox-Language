@@ -2,6 +2,8 @@
 
 # Lox Language
 
+
+
 ## 0 Lox.java
 
 - `main`
@@ -9,7 +11,10 @@
 - `run`
 - `error`, `report`
   - 可能的错误来自于三个过程，不同过程的错误处理方式也不同
-    - 静态过程：1.scan的时候发现不规范的字符导致的此法错误；2.pasre的时候发现无法闭合规则导致的语法错误
+    - 静态过程（static）：
+      - 1.scan的时候发现不规范的字符导致的此法错误；
+      - 2.pasre的时候发现无法闭合规则导致的语法错误；
+      - 3.reslove的时候变量的不合法使用导致的语法错误；
     - 动态过程（Runtime Error）：运行时产生的计算错误，如整数和字符串相加
 
 ---
@@ -150,6 +155,9 @@ switch (c) {
 defineAst(outputDir, "Expr", Arrays.asList(
             "Assign   : Token name, Expr value",
             "Call     : Expr callee, Token paren, List<Expr> arguments",
+            "This     : Token keyword",//用以指代当前的instance
+            "Get      : Expr object, Token name",
+            "Set      : Expr object, Token name, Expr value",
             "Logic    : Expr left, Token operator, Expr right",
             "Binary   : Expr left, Token operator, Expr right",
             "Grouping : Expr expression", 
@@ -182,6 +190,8 @@ abstract <R> R accept(Visitor<R> visitor);
 
 ```java
 defineAst(outputDir, "Stmt", Arrays.asList(
+  					//Question:没有field感觉很变扭....
+            "Class      : Token name, List<Stmt.Function> methods",
             "If         : Expr condition, Stmt thenBranch, Stmt elseBranch",
             //"For        : Stmt initializer, Expr condition, Expr increment, Stmt body",
             "Function   : Token name, List<Token> params, List<Stmt> body",
@@ -192,13 +202,7 @@ defineAst(outputDir, "Stmt", Arrays.asList(
             "Return     : Token keyword, Expr value",
             "Var        : Token name, Expr initializer"//变量的声明节点
 ));
-```
 
-
-
-> 将之前的expression作为statement的其中一种子类，并完善如打印、赋值等操作。
-
-```java
 interface Visitor<R> {
     R visitExpressionStmt(Expression stmt);
     R visitPrintStmt(Print stmt);
@@ -219,18 +223,20 @@ abstract <R> R accept(Visitor<R> visitor);
 >```java
 >program     → declaration* EOF ;
 >
->declaration → varDecl | funDecl	| statement ;
+>declaration → varDecl | funDecl	| classDecl |statement ;
 >
->------------------------------------
+>//------------------------------------ Decl ------------------------------------
 >
+>classDecl   → "class" IDENTIFIER "{" function* "}" ;
+>  
 >funDecl  → "func" function ;
 >function → IDENTIFIER "(" parameters? ")" block ;
 >parameters → IDENTIFIER ( "," IDENTIFIER )* ;
 >
 >varDecl  → "var" IDENTIFIER ( "=" expression )? ";" ;
 >
->------------------------------------
->  
+>//------------------------------------ Stmt ------------------------------------
+>
 >statement → exprStmt | printStmt | block | ifStmt | whileStmt | returnStmt ;
 >exprStmt  → expression ";" ;
 >printStmt → "print" expression ";" ;
@@ -238,19 +244,19 @@ abstract <R> R accept(Visitor<R> visitor);
 >whileStmt → "while" "(" expression ")" statement ;
 >//在这里使用desugar将其parse为包含block的一个block，甚至无需在interpretre中新写函数
 >forStmt   → "for" "(" ( varDecl | exprStmt | ";" )
->                      expression? ";"
->                      expression? ")" statement ;
+>                 expression? ";"
+>                 expression? ")" statement ;
 >block     → "{" declaration* "}" ;
 >returnStmt → "return" expression? ";" ;
 >
->------------------------------------
+>//------------------------------------ Expr ------------------------------------
 >expression → assignment ;
 >
 >//若该语句是assignment，则等式的左边一定是Token而不是Expr，即左边为变量右侧为可计算值的Expr
 >//但有时候左边是复杂的表达式如 makeList().head.next = node; 中，parser在遇到‘=’前都不知道
 >//在parse一个l-value，如何解决这个问题？先用Expr来计算l-value，若得到Expr.Valiable则赋值
->assignment → IDENTIFIER "=" assignment | logic_or ;
-> 
+>assignment     → ( call "." )? IDENTIFIER "=" assignment | logic_or ;
+>
 >logic_or       → logic_and ( "or" logic_and )* ;
 >logic_and      → equality ( "and" equality )* ;
 >equality       → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -259,12 +265,12 @@ abstract <R> R accept(Visitor<R> visitor);
 >multiplication → unary ( ( "/" | "*" ) unary )* ;
 >unary          → ( "!" | "-" ) unary | call ;
 >//call的优先级在unary之上，在primary之后
->    call           → primary ( "(" arguments? ")" )* ;
+>call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;//这里使用primary而不是IDENTIFIER是为什么？
 >arguments      → expression ( "," expression )* ;
 >primary        → NUMBER | STRING | "false" | "true" | "nil"	| "(" expression ")" | IDENTIFIER ;
 >
 >```
->     
+>
 
 - 属性
   - `tokens`
@@ -272,20 +278,7 @@ abstract <R> R accept(Visitor<R> visitor);
   - `List<Stmt> statements`
 
 - 调用方法
-
-1. ~~返回 `Expr`类~~
-
-```java
-Expr parse() {
-    try {
-        return expression();
-    } catch (ParseError error) {
-        return null;
-    }
-}
-```
-
-2. 返回 List\<`Stmt`>
+	- 返回 List\<`Stmt`>
 
 ```java
 List<Stmt> parse() {
@@ -486,7 +479,7 @@ private void synchronize() {
     
     - 2. 在函数的声明中，首先`declare`、`define`函数名，随后通过`resolveFunction`检查body中的变量使用
   3. 在block中，首先新建一个scope，通过`resolve`检查body中所有的statements后结束当前的scope
-    
+  
 - `Expr`类
   
     - `visitLogicExpr`
@@ -614,7 +607,17 @@ private void executeBlock(List<Stmt> statements, Environment environment) {
 }
 ```
 
-### 4.2 LoxFunction.java
+
+### 4.2 LoxCallable.java
+
+> ​	可调用接口的抽象接口  #Question: 这里为什么要设计成接口？
+
+- 属性
+  - int arity();//需要的参数的数量
+  - Object call(Interpreter interpreter, List<\Object> arguments);
+  - String toString();//在print时被调用
+
+### 4.3 LoxFunction.java
 
 > 对LoxCallable抽象接口的一种implement
 
@@ -645,16 +648,15 @@ private void executeBlock(List<Stmt> statements, Environment environment) {
     }
 ```
 
-### 4.3 LoxCallable.java
+### 4.4 LoxClass.java
 
-> ​	可调用接口的抽象接口  #Question: 这里为什么要设计成接口？
+> 继承LoxCallable类，用来生成可调用的class对象，实现instance的生成
 
 - 属性
-  - int arity();//需要的参数的数量
-  - Object call(Interpreter interpreter, List<\Object> arguments);
-  - String toString();//在print时被调用
+  - private Stmt.Class klass
+- 
 
-### 4.4 Return.java
+### 4.5 Return.java
 
 > 继承RuntimeException的类，实现return跳出当前的页帧并返回值到上一个页帧（默认没有return则返回null）
 
@@ -662,6 +664,7 @@ private void executeBlock(List<Stmt> statements, Environment environment) {
   - final Object `value`
 - 构造方法
   - Return(Object value){ super(null, null, false, false);  this.value = `value`; }
+
 
 
 

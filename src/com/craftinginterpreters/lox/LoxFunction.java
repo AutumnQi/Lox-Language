@@ -5,10 +5,18 @@ import java.util.List;
 class LoxFunction implements LoxCallable {
     private final Stmt.Function declaration;
     private final Environment closure;
+    private final boolean isInitializer;//若是initializer则只能被调用一次
 
-    LoxFunction(Stmt.Function declaration, Environment closure) {
+    LoxFunction(Stmt.Function declaration, Environment closure, boolean isInitializer) {
         this.closure = closure;
         this.declaration = declaration;
+        this.isInitializer = isInitializer;
+    }
+
+    LoxFunction bind(LoxInstance instance) {//实现func和instaance绑定
+        Environment environment = new Environment(closure);
+        environment.define("this", instance);
+        return new LoxFunction(declaration, environment,isInitializer);
     }
 
     @Override
@@ -34,7 +42,7 @@ class LoxFunction implements LoxCallable {
         } catch (Return returnValue) {
             return returnValue.value;
         }
-
+        if (isInitializer) return closure.getAt(0, "this");
         return null;//函数没有返回值则返回null
     }
 }

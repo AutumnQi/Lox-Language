@@ -3,6 +3,9 @@ package com.craftinginterpreters.lox;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.util.List;
+
+import com.craftinginterpreters.lox.Stmt.Function;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -134,6 +137,10 @@ class Parser {
             if (expr instanceof Expr.Variable) {
                 Token name = ((Expr.Variable) expr).name;
                 return new Expr.Assign(name, value);
+            } else if(expr instanceof Expr.Get) {
+                Token name = ((Expr.Get) expr).name;
+                Expr object = ((Expr.Get) expr).object;
+                return new Expr.Set(object, name, value);
             }
 
             error(equals, "Invalid assignment target.");
@@ -231,11 +238,14 @@ class Parser {
 
     private Expr call() {
         Expr expr = primary();
-        while(true){
+        while (true) {
             if (match(LEFT_PAREN)) {
                 expr = finishCall(expr);
-            }
-            else break;
+            } else if (match(DOT)) {
+                Token name = consume(IDENTIFIER, "Expect property name after '.'.");
+                expr = new Expr.Get(expr, name);
+            } else
+                break;
         }
 
         return expr;
@@ -260,6 +270,7 @@ class Parser {
         if (match(FALSE)) return new Expr.Literal(false);
         if (match(TRUE)) return new Expr.Literal(true);
         if (match(NIL)) return new Expr.Literal(null);
+        if (match(THIS)) return new Expr.This(previous());
         if (match(NUMBER, STRING)) {
             return new Expr.Literal(previous().literal);
         }
@@ -284,8 +295,9 @@ class Parser {
 
     private Stmt declaration() {
         try{
+            if(match(CLASS)) return classDeclaration();
             if(match(FUN)) return function("function");
-            if(match(VAR)) return varDeclarationStatement();
+            if(match(VAR)) return varDeclaration();
             return statement();
         } catch(ParseError error){
             synchronize();
@@ -294,7 +306,18 @@ class Parser {
         
     }
 
-    private Stmt varDeclarationStatement() {
+    private Stmt classDeclaration(){
+        Token name = consume(IDENTIFIER, "Except class name");
+        List<Stmt.Function> methods = new ArrayList<>();
+        consume(LEFT_BRACE, "Except '{' before class body");
+        while(!match(RIGHT_BRACE)&&!isAtEnd()){
+            methods.add(function("method"));
+        }
+        consume(RIGHT_BRACE, "Expect '}' after class body.");
+        return new Stmt.Class(name, methods);
+    }
+
+    private Stmt varDeclaration() {
         Token name = consume(IDENTIFIER, "Expect variable name.");
         Expr initializer = null;//变量的声明不要放在if block中
         if(match(EQUAL)){
@@ -305,7 +328,7 @@ class Parser {
 
     }
 
-    private Stmt function(String kind) {//kind是用来干嘛的？在定义函数时，kind=function
+    private Stmt.Function function(String kind) {//kind是用来干嘛的？在定义函数时，kind=function
         //TODO: 1.Add anonymous function syntax
         Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
         consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
@@ -381,7 +404,7 @@ class Parser {
         if (match(SEMICOLON)) {
             initializer = null;
         } else if (match(VAR)) {
-            initializer = varDeclarationStatement();
+            initializer = varDeclaration();
         } else {
             initializer = expressionStatement();
         }

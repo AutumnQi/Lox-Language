@@ -5,17 +5,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
+import com.craftinginterpreters.lox.Expr.This;
+
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和interpreter不同，expr的visitor
     private final Interpreter interpreter;
-    private final Stack<Map<String, Boolean>> scopes = new Stack<>();
-    private FunctionType currentFunction = FunctionType.NONE;//用来检测一些不符合规范的语句，如出现在function body外的return语句
+    private final Stack<Map<String, Boolean>> scopes = new Stack<>();// TODO:
+                                                                     // 再加一个状态来反应变量是否在scope中被使用，scope结束时未使用则提出warning
+                                                                     // Question：为什么这里使用String而非Expr等？Ans：因为有this
+    private FunctionType currentFunction = FunctionType.NONE;// 用来检测一些不符合规范的语句，如出现在function body外的return语句
+    private ClassType currentClass = ClassType.NONE;//用来检测this的非法使用
 
     Resolver(Interpreter interpreter) {
         this.interpreter = interpreter;
     }
 
     private enum FunctionType {
-        NONE, FUNCTION
+        NONE, FUNCTION, METHOD, INITIALIZER
+    }
+    private enum ClassType {
+        NONE, CLASS
     }
 
     private void beginScope() {
@@ -34,7 +42,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
         statement.accept(this);// this指的是visitor
     }
 
-    void resolve(List<Stmt> statements) {//外部调用接口
+    void resolve(List<Stmt> statements) {// 外部调用接口
         for (Stmt statement : statements) {
             resolve(statement);
         }
@@ -51,7 +59,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
     }
 
     private void resolveFunction(Stmt.Function stmt, FunctionType type) {
-        FunctionType enclosingFunction = currentFunction;//暂存当前的FunctionType
+        FunctionType enclosingFunction = currentFunction;// 暂存当前的FunctionType
         currentFunction = type;
         beginScope();
         for (Token param : stmt.params) {
@@ -75,17 +83,41 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
             return;
         Map<String, Boolean> scope = scopes.peek();
         if (scope.containsKey(name.lexeme)) {
-            Lox.error(name,
-          "Variable with this name already declared in this scope.");
+            Lox.error(name, "Variable with this name already declared in this scope.");
         }
         scope.put(name.lexeme, true);
     }
 
-    /********************************************** Visit Expression**************************************************/
+    /**********************************************
+     * Visit Expression
+     **************************************************/
+    @Override
+    public Void visitThisExpr(This expr) {
+        if(currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword, "Cannot use 'this' outside of a class.");
+            return null;
+        }
+        resolveLocal(expr, expr.keyword);//向上查找this指代的instance所在的scope
+        return null;
+    }
+    
+     @Override
+    public Void visitGetExpr(Expr.Get expr) {
+        resolve(expr.object);
+        return null;
+    }
+
+    @Override
+    public Void visitSetExpr(Expr.Set expr) {
+        resolve(expr.object);
+        resolve(expr.value);
+        return null;
+    }
+
     @Override
     public Void visitCallExpr(Expr.Call expr) {
         resolve(expr.callee);
-        for(Expr arg:expr.arguments) {
+        for (Expr arg : expr.arguments) {
             resolve(arg);
         }
         return null;
@@ -125,7 +157,8 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
     @Override
     public Void visitVariableExpr(Expr.Variable expr) {
         if (!scopes.isEmpty() && scopes.peek().get(expr.name.lexeme) == Boolean.FALSE) { // Question:false和Boolean.FALSE有什么区别？
-                                                                                         // 这种情况仅发生在visitVarStmt中已经declare完，resolve initializer时才会发生
+                                                                                         // 这种情况仅发生在visitVarStmt中已经declare完，resolve
+                                                                                         // initializer时才会发生
             Lox.error(expr.name, "Cannot read local variable in its own initializer.");// 在variable没有初始化时调用则报错，但不中断，继续执行
         }
         resolveLocal(expr, expr.name);
@@ -139,7 +172,9 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
         return null;
     }
 
-    /********************************************** Visit Statement **************************************************/
+    /**********************************************
+     * Visit Statement
+     **************************************************/
 
     @Override
     public Void visitExpressionStmt(Stmt.Expression stmt) {
@@ -178,7 +213,8 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
     public Void visitIfStmt(Stmt.If stmt) {
         resolve(stmt.condition);
         resolve(stmt.thenBranch);
-        if(stmt.elseBranch!=null) resolve(stmt.elseBranch);
+        if (stmt.elseBranch != null)
+            resolve(stmt.elseBranch);
         return null;
     }
 
@@ -199,10 +235,32 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
     public Void visitReturnStmt(Stmt.Return stmt) {
         if (currentFunction == FunctionType.NONE) {
             Lox.error(stmt.keyword, "Cannot return from top-level code.");
+        } else if(currentFunction == FunctionType.INITIALIZER) {
+            Lox.error(stmt.keyword, "Cannot return from init function.");
         }
-        if(stmt.value!=null) resolve(stmt.value);
+        if (stmt.value != null)
+            resolve(stmt.value);
         return null;
     }
 
+    @Override
+    public Void visitClassStmt(Stmt.Class stmt) {
+        ClassType enclosingClass = currentClass;
+        currentClass = ClassType.CLASS;
+        declare(stmt.name);
+        define(stmt.name);// 和function一样不存在初始化的过程，可以直接调用 Qusetiong：？？？class不用实例化吗？
+        beginScope();
+        scopes.peek().put("this",Boolean.TRUE);
+        for (Stmt.Function method : stmt.methods) {
+            FunctionType declaration = FunctionType.METHOD;
+            if (method.name.lexeme.equals("init")) {
+                declaration = FunctionType.INITIALIZER;
+              }
+            resolveFunction(method, declaration);
+        }
+        endScope();
+        currentClass = enclosingClass;
+        return null;
+    }
     
 }
