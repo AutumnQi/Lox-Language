@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.util.List;
 
-import com.craftinginterpreters.lox.Stmt.Function;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -266,11 +264,17 @@ class Parser {
     }
 
     private Expr primary() {
-        //primary → NUMBER | STRING | "false" | "true" | "nil" | "(" expression ")" | IDENTIFIER | block
+        //primary → NUMBER | STRING | "false" | "true" | "nil" | "(" expression ")" | IDENTIFIER 
         if (match(FALSE)) return new Expr.Literal(false);
         if (match(TRUE)) return new Expr.Literal(true);
         if (match(NIL)) return new Expr.Literal(null);
         if (match(THIS)) return new Expr.This(previous());
+        if (match(SUPER)) {//TODO: 将继承关系中的函数调用从super转化为inner的方式
+            Token keyword = previous();
+            consume(DOT, "Except '.' after super");
+            Token method = consume(IDENTIFIER, "Expect superclass method name.");
+            return new Expr.Super(keyword, method);
+        }
         if (match(NUMBER, STRING)) {
             return new Expr.Literal(previous().literal);
         }
@@ -308,13 +312,18 @@ class Parser {
 
     private Stmt classDeclaration(){
         Token name = consume(IDENTIFIER, "Except class name");
+        Expr.Variable superclass = null;
+        if(match(LESS)){//使用<作为继承的符号
+            consume(IDENTIFIER, "Expect superclass name.");
+            superclass = new Expr.Variable(previous());
+        }
         List<Stmt.Function> methods = new ArrayList<>();
         consume(LEFT_BRACE, "Except '{' before class body");
         while(!match(RIGHT_BRACE)&&!isAtEnd()){
             methods.add(function("method"));
         }
         consume(RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, methods);
+        return new Stmt.Class(name, superclass,methods);
     }
 
     private Stmt varDeclaration() {

@@ -23,7 +23,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
         NONE, FUNCTION, METHOD, INITIALIZER
     }
     private enum ClassType {
-        NONE, CLASS
+        NONE, CLASS, SUBCLASS
     }
 
     private void beginScope() {
@@ -100,8 +100,18 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
         resolveLocal(expr, expr.keyword);//向上查找this指代的instance所在的scope
         return null;
     }
+
+    @Override
+    public Void visitSuperExpr(Expr.Super expr) {
+        if(currentClass != ClassType.SUBCLASS) {
+            Lox.error(expr.keyword, "Cannot use 'super' outside of a class.");
+            return null;
+        }
+        resolveLocal(expr, expr.keyword);
+        return null;
+    }
     
-     @Override
+    @Override
     public Void visitGetExpr(Expr.Get expr) {
         resolve(expr.object);
         return null;
@@ -248,8 +258,19 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
         ClassType enclosingClass = currentClass;
         currentClass = ClassType.CLASS;
         declare(stmt.name);
-        define(stmt.name);// 和function一样不存在初始化的过程，可以直接调用 Qusetiong：？？？class不用实例化吗？
+        define(stmt.name);// 和function一样不存在初始化的过程，可以直接调用 Qusetiong：？？？class不用实例化吗？ Ans：这里的调用就是实例化的过程
+        if (stmt.superclass != null && stmt.name.lexeme.equals(stmt.superclass.name.lexeme)) {
+            Lox.error(stmt.superclass.name, "A class cannot inherit from itself.");
+        }
+        if (stmt.superclass != null) {//放在这里是为了保证子类仍然是合法定义的，只报错超类未被定义，符合静态错误的标准
+            currentClass = ClassType.SUBCLASS;
+            resolve(stmt.superclass);
+        }
         beginScope();
+        if (stmt.superclass != null) {
+            beginScope();//Question: 这里为什么要再开一个scope? this和super用的层级不是一样的吗？Ans: 因为在interperter中此处新建了一个env来储存super，为了保持一致需要新建一个scope
+            scopes.peek().put("super", true);
+        }
         scopes.peek().put("this",Boolean.TRUE);
         for (Stmt.Function method : stmt.methods) {
             FunctionType declaration = FunctionType.METHOD;
@@ -259,6 +280,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
             resolveFunction(method, declaration);
         }
         endScope();
+        if (stmt.superclass != null) endScope();
         currentClass = enclosingClass;
         return null;
     }

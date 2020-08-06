@@ -6,16 +6,21 @@ import java.util.Map;
 
 class LoxClass implements LoxCallable {//TODO: 增加静态方法
     final String name;
+    final LoxClass superclass;
     Map<String, LoxFunction> methods = new HashMap<>();
 
-    LoxClass(String name, Map<String, LoxFunction> methods){
+    LoxClass(String name, LoxClass superclass ,Map<String, LoxFunction> methods){
         this.name = name;
+        this.superclass = superclass;
         this.methods = methods;
     }
 
     public LoxFunction findMethod(String name) {
         if(methods.containsKey(name)){
             return methods.get(name);
+        }
+        if (superclass != null) {//在自身methods中没有找到时去superclass中找，同时解决了继承和重写问题！！妙啊！！然而无法解决在子类内部调用父类函数的问题，所以还是要做和this一样的处理
+            return superclass.findMethod(name);
         }
         return null;
     }

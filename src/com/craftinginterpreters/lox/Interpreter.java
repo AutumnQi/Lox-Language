@@ -233,6 +233,19 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     }
 
     @Override
+    public Object visitSuperExpr(Super expr) {
+        int distance = locals.get(expr);
+        LoxClass superclass = (LoxClass) environment.getAt(distance, "super");
+        // "this" is always one level nearer than "super"'s environment.
+        LoxInstance object = (LoxInstance) environment.getAt(distance - 1, "this");
+        LoxFunction method = superclass.findMethod(expr.method.lexeme);
+        if (method == null) {
+            throw new RuntimeError(expr.method, "Undefined property '" + expr.method.lexeme + "'.");
+        }
+        return method.bind(object);
+    }
+
+    @Override
     public Object visitBinaryExpr(Binary expr) {
         Object left = evaluate(expr.left);
         Object right = evaluate(expr.right);
@@ -285,13 +298,31 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     
     @Override
     public Void visitClassStmt(Stmt.Class stmt) {
+        Object superclass = null;
+        if (stmt.superclass != null) {
+            superclass = evaluate(stmt.superclass);
+            if (!(superclass instanceof LoxClass)) {
+                throw new RuntimeError(stmt.superclass.name, "Superclass must be a class.");
+            }
+        }
         environment.define(stmt.name.lexeme, null);
+
+        if (stmt.superclass != null) {//存在继承则新建一个env在其中定义super，该env对应class的内部，外部无法使用super 
+                                    //Question: 为什么this没有这个需求？Ans: 因为这里class的定义需要用到外部环境中的superclass，类似执行block的过程，而普通的class定义是完全不涉及到对env的交互的，包括this的使用
+            environment = new Environment(environment);
+            environment.define("super", superclass);
+        }
+
         Map<String, LoxFunction> methods = new HashMap<>();
         for (Stmt.Function method : stmt.methods) {
             LoxFunction function = new LoxFunction(method, environment, method.name.lexeme.equals("init"));//这里多个instance的func不是同名了吗？Ans: LoxFunction是一个接口对象，此处的method不同于func，是定义在class的filed内的而非env
             methods.put(method.name.lexeme, function);
         }
-        LoxClass klass = new LoxClass(stmt.name.lexeme, methods);
+        LoxClass klass = new LoxClass(stmt.name.lexeme, (LoxClass)superclass,methods);
+        
+        if (superclass != null) {//回退到上一个env
+            environment = environment.enclosing;
+        }
         environment.assign(stmt.name, klass);
         return null;
     }

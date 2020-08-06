@@ -18,6 +18,7 @@ public class GenerateAst {
             "Assign   : Token name, Expr value",
             "Call     : Expr callee, Token paren, List<Expr> arguments",
             "This     : Token keyword",//用以指代当前的instance
+            "Super    : Token keyword, Token method",//和this不同，super指代的是一个抽象的类没有实际的fields，只能被调用method
             "Get      : Expr object, Token name",
             "Set      : Expr object, Token name, Expr value",
             "Logic    : Expr left, Token operator, Expr right",
@@ -29,7 +30,7 @@ public class GenerateAst {
         ));
         
         defineAst(outputDir, "Stmt", Arrays.asList(
-            "Class      : Token name, List<Stmt.Function> methods",//Question: 没有field感觉很变扭....
+            "Class      : Token name, Expr.Variable superclass, List<Stmt.Function> methods",//Question: 没有field感觉很变扭....
             "If         : Expr condition, Stmt thenBranch, Stmt elseBranch",
             //"For        : Stmt initializer, Expr condition, Expr increment, Stmt body",
             "Function   : Token name, List<Token> params, List<Stmt> body",

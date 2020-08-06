@@ -4,7 +4,7 @@
 
 
 
-## 0 Lox.java
+## 0. Lox.java
 
 - `main`
 - `runPrompt`, `runFile`
@@ -191,7 +191,7 @@ abstract <R> R accept(Visitor<R> visitor);
 ```java
 defineAst(outputDir, "Stmt", Arrays.asList(
   					//Question:没有field感觉很变扭....
-            "Class      : Token name, List<Stmt.Function> methods",
+            "Class      : Token name,Expr.Variable superclass, List<Stmt.Function> methods",
             "If         : Expr condition, Stmt thenBranch, Stmt elseBranch",
             //"For        : Stmt initializer, Expr condition, Expr increment, Stmt body",
             "Function   : Token name, List<Token> params, List<Stmt> body",
@@ -227,7 +227,7 @@ abstract <R> R accept(Visitor<R> visitor);
 >
 >//------------------------------------ Decl ------------------------------------
 >
->classDecl   → "class" IDENTIFIER "{" function* "}" ;
+>classDecl   → "class" IDENTIFIER ( "<" IDENTIFIER )? "{" function* "}" ;
 >  
 >funDecl  → "func" function ;
 >function → IDENTIFIER "(" parameters? ")" block ;
@@ -267,7 +267,7 @@ abstract <R> R accept(Visitor<R> visitor);
 >//call的优先级在unary之上，在primary之后
 >call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;//这里使用primary而不是IDENTIFIER是为什么？
 >arguments      → expression ( "," expression )* ;
->primary        → NUMBER | STRING | "false" | "true" | "nil"	| "(" expression ")" | IDENTIFIER ;
+>primary        → NUMBER | STRING | "false" | "true" | "nil"	| "(" expression ")" | IDENTIFIER 								|"super" "." IDENTIFIER ;;
 >
 >```
 >
@@ -706,6 +706,95 @@ private void executeBlock(List<Stmt> statements, Environment environment) {
 
 - 当前每个函数的closure其实是指向当前environment的对象指针，在当前的environment发生变化后closure也会随之发生变化，造成可能多次执行函数的结果不同，为了解决这个问题，需要引入Persistent Environment。
 - **persistent data structures**：在每次使用data时创建一个新的副本而不是指向当前的data
+
+<img src="pics/多重继承中super的指代.png" alt="多重继承中super的指代关系" style="zoom:35%;" />
+
+> environment树在interpret过程中的生长，最终形成一个巨大的单向链表，某个节点自身只能指向一个enclosing但可以被多个子节点指，通过向上遍历链表的过程获取执行时需要的env，向上遍历的distance在resolve过程中解决
+
+- #### environment树的生长
+
+  - 1.作为**主干**的**全局环境**的生长
+
+    - 再实例化Interpreter时进行初始化：
+
+     ```java
+      final Environment globals = new Environment();
+     ```
+  
+    - 在visitClassStmt, visitFunctionStmt, visitVarStmt 时存在对全局环境的修改
+
+     ```java
+    //visitClassStmt
+      environment.define(stmt.name.lexeme, null);
+    environment.assign(stmt.name, klass);
+      //visitFunctionStmt
+      environment.define(stmt.name.lexeme, function);
+      //visitVarStmt
+      environment.define(stmt.name.lexeme, value);
+     ```
+  
+  
+  - 2.作为**分支**的各种**局部环境**的生长
+  
+    - Interpreter中
+  
+      - 在visiteClassStmt时，若该类是继承某超类的，新建一个包含“super”对象的环境：
+    
+       ```java
+        environment = new Environment(environment);
+        environment.define("super", superclass);
+       ```
+    
+      - 在visitBlock时，新建一个局部环境，在其中执行stmt，不干扰全局环境（主要是为了保持一致）：
+    
+       ```java
+        executeBlock(stmt.statements, new Environment(environment));
+       ```
+    
+    - LoxFunction中
+    
+      - 在绑定Function对象和Instance对象时，更新function对象的environment，新建一个包含“this”对象的环境，this指向传入的instance对象：
+    
+       ```java
+        Environment environment = new Environment(closure);
+        environment.define("this", instance);
+        return new LoxFunction(declaration, environment,isInitializer)
+       ```
+  
+      - 在调用function对象的call方法时，新建一个environment将argument和parameters进行绑定，再丢入interpreter的executeBlock中进行执行
+    
+       ```java
+        Environment environment = new Environment(closure)
+        for (int i = 0; i < declaration.params.size(); i++) {
+        environment.define(declaration.params.get(i).lexeme,arguments.get(i));
+        } 
+       ```
+  
+- #### environment树的调用
+
+  
+  - `executeBlock(List<Stmt> statements, Environment environment)`
+  
+  - 新建一个当前interpreter的env的备份previous，在执行时用传入的env将当前的env覆盖后执行block内部，保证**执行时可用到全局环境**且**执行完毕后不干扰全局环境**
+  
+    ```java
+    		Environment previous = this.environment;//储存当前Interpreter的env
+        try{
+        this.environment = environment;//用新的env覆盖当前的Interpreter的env
+          for(Stmt statement : statements){
+            //TODO 3.处理break的情况
+            execute(statement);
+          }
+        } catch (RuntimeError error){
+        Lox.runtimeError(error);
+        } finally {
+          this.environment = previous;//恢复之前的env
+        }
+    ```
+  
+    
+
+
 
 ---
 
