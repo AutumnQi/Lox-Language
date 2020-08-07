@@ -3,8 +3,6 @@ package com.craftinginterpreters.lox;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.management.RuntimeErrorException;
-
 class Environment {
     final Environment enclosing;
     private final Map<String, Object> values = new HashMap<>();

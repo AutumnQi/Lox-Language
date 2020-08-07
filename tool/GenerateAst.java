@@ -30,7 +30,7 @@ public class GenerateAst {
         ));
         
         defineAst(outputDir, "Stmt", Arrays.asList(
-            "Class      : Token name, Expr.Variable superclass, List<Stmt.Function> methods",//Question: 没有field感觉很变扭....
+            "Class      : Token name, Expr.Variable superclass, List<Stmt.Function> methods",
             "If         : Expr condition, Stmt thenBranch, Stmt elseBranch",
             //"For        : Stmt initializer, Expr condition, Expr increment, Stmt body",
             "Function   : Token name, List<Token> params, List<Stmt> body",

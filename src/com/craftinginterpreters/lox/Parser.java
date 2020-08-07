@@ -1,7 +1,5 @@
 package com.craftinginterpreters.lox;
 
-import java.io.IOException;
-import java.lang.reflect.Array;
 import java.util.List;
 
 import java.util.ArrayList;
@@ -15,7 +13,12 @@ import java.util.Arrays;
 import static com.craftinginterpreters.lox.TokenType.*;
 
 class Parser {
-    private static class ParseError extends RuntimeException{};
+    private static class ParseError extends RuntimeException{
+        /**
+         *
+         */
+        private static final long serialVersionUID = 1L;
+    };
     private final List<Token> tokens;
     private int current = 0;
 

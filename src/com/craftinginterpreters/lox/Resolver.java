@@ -11,7 +11,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {// 此处和in
     private final Interpreter interpreter;
     private final Stack<Map<String, Boolean>> scopes = new Stack<>();// TODO:
                                                                      // 再加一个状态来反应变量是否在scope中被使用，scope结束时未使用则提出warning
-                                                                     // Question：为什么这里使用String而非Expr等？Ans：因为有this
+                                                                     // Question：为什么这里使用String而非Token等？Ans：因为有this
     private FunctionType currentFunction = FunctionType.NONE;// 用来检测一些不符合规范的语句，如出现在function body外的return语句
     private ClassType currentClass = ClassType.NONE;//用来检测this的非法使用
 

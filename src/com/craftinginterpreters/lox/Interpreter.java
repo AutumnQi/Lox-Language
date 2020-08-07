@@ -236,8 +236,8 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {//该类i
     public Object visitSuperExpr(Super expr) {
         int distance = locals.get(expr);
         LoxClass superclass = (LoxClass) environment.getAt(distance, "super");
-        // "this" is always one level nearer than "super"'s environment.
-        LoxInstance object = (LoxInstance) environment.getAt(distance - 1, "this");
+        // "this" is always one level nearer than "super"'s environment.实例化调用class的init方法，传入的参数为带有全局环境的interpreter，该方法的env为含super的环境
+        LoxInstance object = (LoxInstance) environment.getAt(distance - 1, "this");//method内的super只有在实例化时才会被调用，故此时一定有一个instance
         LoxFunction method = superclass.findMethod(expr.method.lexeme);
         if (method == null) {
             throw new RuntimeError(expr.method, "Undefined property '" + expr.method.lexeme + "'.");
